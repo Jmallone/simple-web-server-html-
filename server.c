@@ -17,13 +17,31 @@ char webpage[]=
 "<!DOCTYPE html>\r\n";
 
 
-unsigned long fsize(char* file)
-{
+unsigned long fsize(char* file){
+
     FILE * f = fopen(file, "r");
     fseek(f, 0, SEEK_END);
     unsigned long len = (unsigned long)ftell(f);
     fclose(f);
     return len;
+}
+
+char* loadConfigFile(int line){
+	FILE *pont_arq;
+	char texto_str[20];
+	pont_arq = fopen(".serverConfig", "r");
+
+	int i;
+	for (i = 0; i < line; i++) fgets(texto_str, 20, pont_arq);
+	texto_str[strlen(texto_str)-1] = '\0';
+
+	//fechando o arquivo
+	fclose(pont_arq);
+
+	char* retorno = (char*)malloc(20*sizeof(char));
+	strcpy(retorno, texto_str);
+
+	return retorno;
 }
 
 int main(int argc, char *argv[]){
@@ -33,13 +51,15 @@ int main(int argc, char *argv[]){
 	int fd_server,fd_client;
 	char buf[2048];
 	/* Diretorio Raiz */
-	char rootDir[] = "./www/";
-	char rootFile[] = "index.html";
+	char* rootDir = loadConfigFile(2);
+	char* rootFile = loadConfigFile(5);
+
+	printf("ROOT DIR:  [%s] -- \n", rootDir);
+	printf("ROOT FILE: [%s] -- \n", rootFile);
 
 	int on=1,fdimg,fdfile;
 
 	/* COMEÇO DA INTERFACE DE UM SOCKET */
-					//	socket(IPV4, TCP, IP)
 	fd_server = socket(AF_INET, SOCK_STREAM, 0);
 	if(fd_server < 0){
 		perror("socket");
@@ -77,7 +97,6 @@ int main(int argc, char *argv[]){
 				continue;
 			}
 			printf("----------------------------------+\nObtendo Conexão para o Cliente.   |\n----------------------------------+\n");
-			
 			
 			if(!fork()){
 				/* PROCESSO FILHO */
