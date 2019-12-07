@@ -5,6 +5,9 @@ A simple web server html
 ```bash
 gcc server.c -o server101
 ./server101
+
+Acess a browser and enter in:
+http://localhost:8080/index.html
 ```
 
 ### REFERENCES
