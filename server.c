@@ -34,6 +34,7 @@ int main(int argc, char *argv[]){
 	char buf[2048];
 	/* Diretorio Raiz */
 	char rootDir[] = "./www/";
+	char rootFile[] = "index.html";
 
 	int on=1,fdimg,fdfile;
 
@@ -122,8 +123,8 @@ int main(int argc, char *argv[]){
 
 					/* ENVIA PARA O CLIENTE VISUALIZAR a PAGINA */
 					send(fd_client,webpage,sizeof(webpage),on);
-					snprintf(bufConcat, sizeof bufConcat, "%s%s", rootDir, "index.html");
-					fdfile=open(buf,O_RDONLY);
+					snprintf(bufConcat, sizeof bufConcat, "%s%s", rootDir, rootFile);
+					fdfile=open(bufConcat,O_RDONLY);
 					sendfile(fd_client,fdfile,NULL,300);
 					close(fdfile);			
 				}else{
