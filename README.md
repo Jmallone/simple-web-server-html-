@@ -1,13 +1,37 @@
 # WebServer101
 A simple web server html
 
-## Running
-```bash
-gcc server.c -o server101
-./server101
+<h1>For a better experience, use Firefox. </h1>
+Images in Chrome not load.
 
+## Building and Running
+
+```bash
+    git clone https://github.com/Jmallone/simple-web-server-html-.git
+    cd simple-web-server-html-/
+```
+
+Running:
+```bash
+    make
+```
 Acess a browser and enter in:
-http://localhost:8080/index.html
+http://localhost:8080
+
+## Config File
+A small config file in .serverConfig:
+```bash
+    #Root Dir
+    ./www/
+
+    #Root File
+    index.html
+
+    #port
+    8080
+
+    #end
+    #Dont change order or position
 ```
 
 ### REFERENCES

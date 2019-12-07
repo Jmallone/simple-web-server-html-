@@ -6,16 +6,18 @@
 #include<string.h>
 #include<sys/sendfile.h>
 #include<fcntl.h>
-//#include<sys/types.h>
-//#include<netinet/in.h>
-//#include<netdb.h>
-//#include<sys/stat.h>
+/*
 
+#include<sys/types.h>
+#include<netinet/in.h>
+#include<netdb.h>
+#include<sys/stat.h>
+
+*/
 char webpage[]=
 "HTTP/1.1 200 OK\r\n"
 "Content-type:text/html; charset:UTF-8\r\n\r\n"
 "<!DOCTYPE html>\r\n";
-
 
 unsigned long fsize(char* file){
 
@@ -56,6 +58,7 @@ int main(int argc, char *argv[]){
 
 	printf("ROOT DIR:  [%s] -- \n", rootDir);
 	printf("ROOT FILE: [%s] -- \n", rootFile);
+	printf("PORT :	   [%s] -- \n", loadConfigFile(8));
 
 	int on=1,fdimg,fdfile;
 
@@ -70,7 +73,7 @@ int main(int argc, char *argv[]){
 	setsockopt(fd_server, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(int));
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_addr.s_addr = INADDR_ANY;
-	server_addr.sin_port = htons(8080);
+	server_addr.sin_port = htons(atoi( loadConfigFile(8) ));
 
 	/* ATRIBUINDO UM "NOME" */
 	if(bind(fd_server, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1){
@@ -87,7 +90,6 @@ int main(int argc, char *argv[]){
 	}
 
 	printf("Servidor Iniciado:\n");
-
 
 	while(1){
 			/* NOVO "CLIENTE" */
@@ -106,7 +108,7 @@ int main(int argc, char *argv[]){
 				read(fd_client, buf, 2047);
 
 				/* GET VERBOSE */
-				printf("%s\n", buf);
+				//printf("%s\n", buf);
 				
 				/* VERIFICA O TIPO DE ARQUIVO e o Nome do Arquivo*/
 				char buf_filename[2048];
@@ -123,7 +125,6 @@ int main(int argc, char *argv[]){
 				type = strtok(buf_type, ".");
 				type = strtok(NULL, ".");
 				type = strtok(type, " ");
-
 
 				char bufConcat[256];
 				snprintf(bufConcat, sizeof bufConcat, "%s%s", rootDir, filename);
