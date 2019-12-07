@@ -1,6 +1,12 @@
 # WebServer101
 A simple web server html
 
+## Running
+```bash
+gcc server.c -o server101
+./server101
+```
+
 ### REFERENCES
 1. [C Programming in Linux Tutorial #098 - A Simple Web Server Program](https://www.youtube.com/watch?v=Q1bHO4VbUck&feature=youtu.be&t=789)
 2. [Sistemas de Operação – Sockets](https://www.dcc.fc.up.pt/~ines/aulas/0910/SO/sockets.pdf)
