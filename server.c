@@ -14,6 +14,30 @@
 #include<sys/stat.h>
 
 */
+typedef struct {
+ char *ext;
+ char *mediatype;
+} extn;
+
+//Possiveis Tipos de Media
+extn extensions[] ={
+ {"gif", "image/gif" },
+ {"txt", "text/plain" },
+ {"jpg", "image/jpg" },
+ {"jpeg","image/jpeg"},
+ {"png", "image/png" },
+ {"ico", "image/ico" },
+ {"zip", "image/zip" },
+ {"gz",  "image/gz"  },
+ {"tar", "image/tar" },
+ {"htm", "text/html" },
+ {"html","text/html" },
+ {"php", "text/html" },
+ {"pdf","application/pdf"},
+ {"zip","application/octet-stream"},
+ {"rar","application/octet-stream"},
+ {0,0} };
+
 char webpage[]=
 "HTTP/1.1 200 OK\r\n"
 "Content-type:text/html; charset:UTF-8\r\n\r\n"
@@ -119,8 +143,6 @@ int main(int argc, char *argv[]){
 				perror("Conexão Falhou... \n");
 				continue;
 			}
-			//printf("----------------------------------+\nObtendo Conexão para o Cliente.   |\n----------------------------------+\n");
-			
 			if(!fork()){
 				/* PROCESSO FILHO */
 				close(fd_server);		
@@ -129,7 +151,6 @@ int main(int argc, char *argv[]){
 				read(fd_client, buf, 2047);
 
 				/* GET VERBOSE */
-				//printf("%s\n", buf);
 				printLog(buf);
 				
 				/* VERIFICA O TIPO DE ARQUIVO e o Nome do Arquivo*/
@@ -150,45 +171,39 @@ int main(int argc, char *argv[]){
 
 				char bufConcat[256];
 				snprintf(bufConcat, sizeof bufConcat, "%s%s", rootDir, filename);
-
+				fdfile = open(bufConcat, O_RDONLY);
+                
 				/* ENVIA PARA O CLIENTE VISUALIZAR O FORMATO */
-				if(!strcmp(type, "ico") || !strcmp(type, "jpg") || !strcmp(type, "jpeg") || !strcmp(type, "gif")){	
-					
-					/* DEBUG */
-					printf("	Filename: [%s]\n", filename);
-
-					send_new(fd_client, "HTTP/1.1 200 OK\r\n");
-					send_new(fd_client, "Content-type:image; charset:UTF-8\r\n\r\n");
-
-					fdimg = open(bufConcat, O_RDONLY);
-					sendfile(fd_client, fdimg, NULL, fsize(bufConcat));
-					close(fdimg);
+				int i;
+   				for (i = 0; extensions[i].ext != NULL; i++) {
+					if (!strcmp(type, extensions[i].ext)) {
+						send_new(fd_client, "HTTP/1.1 200 OK\r\n");
+						send_new(fd_client, "Content-type:image; charset:UTF-8\r\n\r\n");
+						sendfile(fd_client, fdfile, NULL, fsize(bufConcat));
+						close(fd_client);
+					}
 				}
-				else if(filename == NULL){
 
+				send_new(fd_client, webpage);
+				if(filename == NULL){
 					/* ENVIA PARA O CLIENTE VISUALIZAR A PAGINA PADRÃO */
-					send_new(fd_client, webpage);
 					snprintf(bufConcat, sizeof bufConcat, "%s%s", rootDir, rootFile);
-					fdfile=open(bufConcat,O_RDONLY);
-					sendfile(fd_client,fdfile,NULL,300);
-					close(fdfile);
+					fdfile = open(bufConcat, O_RDONLY);
 
+					sendfile(fd_client,fdfile,NULL,fsize(bufConcat));
 				}else{
 					printf("	Acess: [%s]\n", filename);
-
-					send_new(fd_client, webpage);
-					fdfile=open(bufConcat,O_RDONLY);
-
 					/* Tratamento ERROR 404*/
 					if(fdfile == -1){
 						printf("404 File not found Error\n");
 						send_new(fd_client, "HTTP/1.1 404 Not Found\r\n");
 						send_new(fd_client, "<html><head><title>404 Not Found</head></title>");
 					}else{
-						sendfile(fd_client,fdfile,NULL,300);
+						sendfile(fd_client,fdfile,NULL,fsize(bufConcat));
 					}
-					close(fdfile);	
 				}
+                
+				close(fdfile);	
 				close(fd_client);
 				exit(0);
 			}
