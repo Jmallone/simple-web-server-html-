@@ -46,6 +46,25 @@ char* loadConfigFile(int line){
 	return retorno;
 }
 
+void printLog(char* buf){
+	if(!strncmp(buf, "GET", 3)){
+		printf("GET\n");
+	}
+
+	if(!strncmp(buf, "POST", 4)){
+		printf("POST\n");
+	}
+	
+	//printf("%s\n", buf);
+}
+
+void send_new(int fd, char *msg) {
+ int len = strlen(msg);
+ if (send(fd, msg, len, 0) == -1) {
+  printf("Error ao Enviar\n");
+ }
+}
+
 int main(int argc, char *argv[]){
 
 	struct sockaddr_in server_addr, client_addr;
@@ -98,7 +117,7 @@ int main(int argc, char *argv[]){
 				perror("Conexão Falhou... \n");
 				continue;
 			}
-			printf("----------------------------------+\nObtendo Conexão para o Cliente.   |\n----------------------------------+\n");
+			//printf("----------------------------------+\nObtendo Conexão para o Cliente.   |\n----------------------------------+\n");
 			
 			if(!fork()){
 				/* PROCESSO FILHO */
@@ -109,6 +128,7 @@ int main(int argc, char *argv[]){
 
 				/* GET VERBOSE */
 				//printf("%s\n", buf);
+				printLog(buf);
 				
 				/* VERIFICA O TIPO DE ARQUIVO e o Nome do Arquivo*/
 				char buf_filename[2048];
@@ -135,27 +155,45 @@ int main(int argc, char *argv[]){
 					/* DEBUG */
 					printf("	FileName: [%s]\n", filename);
 					printf("	Type: [%s]\n", type);
+
+					char header_img[]=
+						"HTTP/1.1 200 OK\r\n"
+						"Content-type:image; charset:UTF-8\r\n\r\n";
+					send_new(fd_client, header_img);
+
+					//send(fd_client,header_img,sizeof(header_img),on);
 					fdimg = open(bufConcat, O_RDONLY);
 					sendfile(fd_client, fdimg, NULL, fsize(bufConcat));
 					close(fdimg);
 				}
 				else if(filename == NULL){
 
-					/* ENVIA PARA O CLIENTE VISUALIZAR a PAGINA */
-					send(fd_client,webpage,sizeof(webpage),on);
+					/* ENVIA PARA O CLIENTE VISUALIZAR A PAGINA PADRÃO */
+					send_new(fd_client, webpage);
 					snprintf(bufConcat, sizeof bufConcat, "%s%s", rootDir, rootFile);
 					fdfile=open(bufConcat,O_RDONLY);
 					sendfile(fd_client,fdfile,NULL,300);
-					close(fdfile);			
+					close(fdfile);
+							
 				}else{
 					printf("	Acess: [%s]\n", filename);
-					send(fd_client,webpage,sizeof(webpage),on);
+
+					send_new(fd_client, webpage);
 					fdfile=open(bufConcat,O_RDONLY);
-					sendfile(fd_client,fdfile,NULL,300);
+
+					if(fdfile == -1){
+						printf("404 File not found Error\n");
+						send_new(fd_client, "HTTP/1.1 404 Not Found\r\n");
+						send_new(fd_client, "Server : Web Server in C\r\n\r\n");
+						send_new(fd_client, "<html><head><title>404 Not Found</head></title>");
+					}else{
+						printf("\n\n   FD FILE: %d\n\n\n",fdfile);
+						sendfile(fd_client,fdfile,NULL,300);
+					}
 					close(fdfile);	
 				}
 				close(fd_client);
-				printf("\nConexão Encerrada!\n---------------------------------->\n\n");
+				//printf("\nConexão Encerrada!\n---------------------------------->\n\n");
 				exit(0);
 			}
 			

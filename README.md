@@ -1,21 +1,14 @@
 # WebServer101
 A simple web server html
 
-<h1>For a better experience, use Firefox. </h1>
-Images in Chrome not load.
-
 ## Building and Running
 
 ```bash
     git clone https://github.com/Jmallone/simple-web-server-html-.git
     cd simple-web-server-html-/
-```
-
-Running:
-```bash
     make
 ```
-Acess a browser and enter in:
+Acess browser in:
 http://localhost:8080
 
 ## Config File
@@ -41,3 +34,4 @@ A small config file in .serverConfig:
 4. [Simple web server en C utilizando sockets](https://kriversia.com/2017/08/simple-web-server-en-c)
 5. [C Library - <string.h>](https://www.tutorialspoint.com/c_standard_library/string_h.htm)
 6. [How do I concatenate two strings in C?](https://stackoverflow.com/questions/8465006/how-do-i-concatenate-two-strings-in-c/8465083)
+7. [A Web Server in C](https://dzone.com/articles/web-server-c)
