@@ -35,3 +35,4 @@ A small config file in .serverConfig:
 5. [C Library - <string.h>](https://www.tutorialspoint.com/c_standard_library/string_h.htm)
 6. [How do I concatenate two strings in C?](https://stackoverflow.com/questions/8465006/how-do-i-concatenate-two-strings-in-c/8465083)
 7. [A Web Server in C](https://dzone.com/articles/web-server-c)
+8. [Pico HTTP Server in C](https://gist.github.com/laobubu/d6d0e9beb934b60b2e552c2d03e1409e)

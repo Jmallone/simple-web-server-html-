@@ -48,11 +48,12 @@ char* loadConfigFile(int line){
 
 void printLog(char* buf){
 	if(!strncmp(buf, "GET", 3)){
-		printf("GET\n");
+		printf("\x1b[32m + [GET]\x1b[0m\n");
 	}
 
 	if(!strncmp(buf, "POST", 4)){
-		printf("POST\n");
+		printf("\x1b[32m + [POST]\x1b[0m\n");
+		printf("%s\n", buf);
 	}
 	
 	//printf("%s\n", buf);
@@ -74,11 +75,6 @@ int main(int argc, char *argv[]){
 	/* Diretorio Raiz */
 	char* rootDir = loadConfigFile(2);
 	char* rootFile = loadConfigFile(5);
-
-	printf("ROOT DIR:  [%s] -- \n", rootDir);
-	printf("ROOT FILE: [%s] -- \n", rootFile);
-	printf("PORT :	   [%s] -- \n", loadConfigFile(8));
-
 	int on=1,fdimg,fdfile;
 
 	/* COMEÇO DA INTERFACE DE UM SOCKET */
@@ -108,7 +104,13 @@ int main(int argc, char *argv[]){
 		exit(1);
 	}
 
-	printf("Servidor Iniciado:\n");
+	system("@cls||clear");
+	printf("\nROOT DIR:  [%s] \n", rootDir);
+	printf("ROOT FILE: [%s] \n", rootFile);
+    printf(
+            "Servidor Iniciado: %shttp://127.0.0.1:%s%s\n",
+            "\033[92m",loadConfigFile(8),"\033[0m\n"
+    		);
 
 	while(1){
 			/* NOVO "CLIENTE" */
@@ -153,15 +155,11 @@ int main(int argc, char *argv[]){
 				if(!strcmp(type, "ico") || !strcmp(type, "jpg") || !strcmp(type, "jpeg") || !strcmp(type, "gif")){	
 					
 					/* DEBUG */
-					printf("	FileName: [%s]\n", filename);
-					printf("	Type: [%s]\n", type);
+					printf("	Filename: [%s]\n", filename);
 
-					char header_img[]=
-						"HTTP/1.1 200 OK\r\n"
-						"Content-type:image; charset:UTF-8\r\n\r\n";
-					send_new(fd_client, header_img);
+					send_new(fd_client, "HTTP/1.1 200 OK\r\n");
+					send_new(fd_client, "Content-type:image; charset:UTF-8\r\n\r\n");
 
-					//send(fd_client,header_img,sizeof(header_img),on);
 					fdimg = open(bufConcat, O_RDONLY);
 					sendfile(fd_client, fdimg, NULL, fsize(bufConcat));
 					close(fdimg);
@@ -174,32 +172,31 @@ int main(int argc, char *argv[]){
 					fdfile=open(bufConcat,O_RDONLY);
 					sendfile(fd_client,fdfile,NULL,300);
 					close(fdfile);
-							
+
 				}else{
 					printf("	Acess: [%s]\n", filename);
 
 					send_new(fd_client, webpage);
 					fdfile=open(bufConcat,O_RDONLY);
 
+					/* Tratamento ERROR 404*/
 					if(fdfile == -1){
 						printf("404 File not found Error\n");
 						send_new(fd_client, "HTTP/1.1 404 Not Found\r\n");
-						send_new(fd_client, "Server : Web Server in C\r\n\r\n");
 						send_new(fd_client, "<html><head><title>404 Not Found</head></title>");
 					}else{
-						printf("\n\n   FD FILE: %d\n\n\n",fdfile);
 						sendfile(fd_client,fdfile,NULL,300);
 					}
 					close(fdfile);	
 				}
 				close(fd_client);
-				//printf("\nConexão Encerrada!\n---------------------------------->\n\n");
 				exit(0);
 			}
 			
 			/* PROCESSO PAI */
 			close(fd_client);
 	}
+	
 
 	return 0;
 }
