@@ -86,7 +86,7 @@ void printLog(char* buf){
 void send_new(int fd, char *msg) {
  int len = strlen(msg);
  if (send(fd, msg, len, 0) == -1) {
-  printf("Sucesso\n");
+  printf("Error ao Enviar\n");
  }
 }
 
@@ -185,15 +185,18 @@ int main(int argc, char *argv[]){
 				}
 
 				send_new(fd_client, webpage);
+	
 				if(!strcmp("/", filename)){
+					printf("AAAAAAAAAA");
 					/* ENVIA PARA O CLIENTE VISUALIZAR A PAGINA PADRÃO */
-					snprintf(bufConcat, sizeof bufConcat, "%s%s", rootDir, rootFile);
+					snprintf(bufConcat, sizeof bufConcat, "%s/%s", rootDir, rootFile);
+					printf("BBBBBBBB: %s\n\n", bufConcat);
 					fdfile = open(bufConcat, O_RDONLY);
 
 					sendfile(fd_client,fdfile,NULL,fsize(bufConcat));
 				}else{
-					printf("	Acess: [%s]\n", filename);
-					printf("	 Type: [%s]\n", type);
+					printf("	Acess: [%s]\n", bufConcat);
+					printf("	Acess: [%s]\n", type);
 					/* Tratamento ERROR 404*/
 					if(fdfile == -1){
 						printf("404 File not found Error\n");
