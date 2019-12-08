@@ -163,7 +163,8 @@ int main(int argc, char *argv[]){
 				char *type;
 				filename = strtok(buf_filename, " ");
 				filename = strtok(NULL, " ");
-				//filename = strtok(filename, "/");
+				printf("===== %s", filename);
+				filename = strtok(filename, "/");
 
 				type = strtok(buf_type, ".");
 				type = strtok(NULL, ".");
@@ -185,7 +186,7 @@ int main(int argc, char *argv[]){
 				}
 
 				send_new(fd_client, webpage);
-				if(!strcmp("/", filename)){
+				if(filename == NULL){
 					/* ENVIA PARA O CLIENTE VISUALIZAR A PAGINA PADRÃO */
 					snprintf(bufConcat, sizeof bufConcat, "%s%s", rootDir, rootFile);
 					fdfile = open(bufConcat, O_RDONLY);
