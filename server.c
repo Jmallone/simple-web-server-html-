@@ -80,13 +80,13 @@ void printLog(char* buf){
 		printf("%s\n", buf);
 	}
 	
-	printf("%s\n", buf);
+	//printf("%s\n", buf);
 }
 
 void send_new(int fd, char *msg) {
  int len = strlen(msg);
  if (send(fd, msg, len, 0) == -1) {
-  printf("Error ao Enviar\n");
+  printf("Sucesso\n");
  }
 }
 
@@ -193,8 +193,7 @@ int main(int argc, char *argv[]){
 					sendfile(fd_client,fdfile,NULL,fsize(bufConcat));
 				}else{
 					printf("	Acess: [%s]\n", filename);
-					printf("	Acess: [%s]\n", bufConcat);
-					printf("	Acess: [%s]\n", type);
+					printf("	 Type: [%s]\n", type);
 					/* Tratamento ERROR 404*/
 					if(fdfile == -1){
 						printf("404 File not found Error\n");
