@@ -86,7 +86,10 @@ void printLog(char* buf){
 void send_new(int fd, char *msg) {
  int len = strlen(msg);
  if (send(fd, msg, len, 0) == -1) {
-  printf("Error ao Enviar\n");
+  printf("#\n");
+ }else{
+  printf(">\n");
+
  }
 }
 
