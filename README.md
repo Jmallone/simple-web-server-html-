@@ -8,6 +8,10 @@ A simple web server html
     cd simple-web-server-html-/
     make
 ```
+Running in background
+```bash
+    nohup serverd &
+```
 Acess browser in:
 http://localhost:8080
 
