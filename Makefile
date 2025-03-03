@@ -1,9 +1,8 @@
-
 serverd: server.c
 	gcc -o serverd server.c
-	./serverd
-run:
+
+run: serverd
 	./serverd
 
 clean:
-	rm serverd
+	rm -f serverd

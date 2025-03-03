@@ -1,224 +1,282 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<unistd.h>
-#include<sys/socket.h>
-#include<arpa/inet.h>
-#include<string.h>
-#include<sys/sendfile.h>
-#include<fcntl.h>
-/*
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <string.h>
+#include <sys/sendfile.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
-#include<sys/types.h>
-#include<netinet/in.h>
-#include<netdb.h>
-#include<sys/stat.h>
+#define LOG_SEPARATOR "\n========================================\n"
 
-*/
+// Declaração das funções
+char* get_config_string(const char *filename, int target_line);
+int get_config_int(const char *filename, int target_line);
+void handle_get(int client_fd, const char *rootDir, const char *filename);
+void handle_post(int client_fd, const char *buffer);
+void handle_request(int client_fd, const char *rootDir);
+void start_server(const char *rootDir, int port);
+
 typedef struct {
- char *ext;
- char *mediatype;
+    char *ext;
+    char *mediatype;
 } extn;
 
-//Possiveis Tipos de Media
-extn extensions[] ={
- {"gif", "image/gif" },
- {"txt", "text/plain" },
- {"jpg", "image/jpg" },
- {"jpeg","image/jpeg"},
- {"png", "image/png" },
- {"ico", "image/ico" },
- {"zip", "image/zip" },
- {"gz",  "image/gz"  },
- {"tar", "image/tar" },
- {"htm", "text/html" },
- {"html","text/html" },
- {"php", "text/html" },
- {"pdf","application/pdf"},
- {"zip","application/octet-stream"},
- {"rar","application/octet-stream"},
- {0,0} };
+// Tipos de media suportados
+extn extensions[] = {
+    {"gif", "image/gif"},
+    {"txt", "text/plain"},
+    {"jpg", "image/jpeg"},
+    {"jpeg", "image/jpeg"},
+    {"png", "image/png"},
+    {"ico", "image/x-icon"},
+    {"zip", "application/zip"},
+    {"gz", "application/gzip"},
+    {"tar", "application/x-tar"},
+    {"htm", "text/html"},
+    {"html", "text/html"},
+    {"php", "text/html"},
+    {"pdf", "application/pdf"},
+    {"rar", "application/vnd.rar"},
+    {NULL, NULL}};
 
-char webpage[]=
-"HTTP/1.1 200 OK\r\n"
-"Content-type:text/html; charset:UTF-8\r\n\r\n"
-"<!DOCTYPE html>\r\n";
+// Estrutura para lidar com requisições HTTP
+typedef struct {
+    void (*handle_get)(int client_fd, const char *rootDir, const char *filename);
+    void (*handle_post)(int client_fd, const char *buffer);
+} RequestHandler;
 
-unsigned long fsize(char* file){
-
-    FILE * f = fopen(file, "r");
-    fseek(f, 0, SEEK_END);
-    unsigned long len = (unsigned long)ftell(f);
-    fclose(f);
-    return len;
+// Obtém tamanho do arquivo
+unsigned long get_file_size(const char *filename) {
+    struct stat st;
+    if (stat(filename, &st) == 0) {
+        return st.st_size;
+    }
+    return -1;
 }
 
-char* loadConfigFile(int line){
-	FILE *pont_arq;
-	char texto_str[20];
-	pont_arq = fopen(".serverConfig", "r");
-
-	int i;
-	for (i = 0; i < line; i++) fgets(texto_str, 20, pont_arq);
-	texto_str[strlen(texto_str)-1] = '\0';
-
-	//fechando o arquivo
-	fclose(pont_arq);
-
-	char* retorno = (char*)malloc(20*sizeof(char));
-	strcpy(retorno, texto_str);
-
-	return retorno;
+// Obtém o tipo de mídia pelo nome do arquivo
+const char *get_mime_type(const char *filename) {
+    char *ext = strrchr(filename, '.');
+    if (!ext) return "application/octet-stream";
+    
+    ext++;
+    for (int i = 0; extensions[i].ext != NULL; i++) {
+        if (strcmp(ext, extensions[i].ext) == 0) {
+            return extensions[i].mediatype;
+        }
+    }
+    return "application/octet-stream";
 }
 
-void printLog(char* buf){
-	if(!strncmp(buf, "GET", 3)){
-		printf("\x1b[32m + [GET]\x1b[0m\n");
-	}
+// Envia um arquivo ao cliente
+void send_file(int client_fd, const char *filepath) {
+    int file_fd = open(filepath, O_RDONLY);
+    if (file_fd == -1) {
+        printf("\U0001F6AB [ERRO] Arquivo não encontrado: %s\n", filepath);
+        send(client_fd, "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n"
+                        "<html><body><h1>404 Not Found</h1></body></html>", 75, 0);
+        return;
+    }
+    
+    unsigned long filesize = get_file_size(filepath);
+    printf("\U0001F4C4 [INFO] Enviando arquivo: %s (Tamanho: %lu bytes)\n", filepath, filesize);
 
-	if(!strncmp(buf, "POST", 4)){
-		printf("\x1b[32m + [POST]\x1b[0m\n");
-		printf("%s\n", buf);
-	}
-	
-	//printf("%s\n", buf);
+    char header[256];
+    snprintf(header, sizeof(header), 
+             "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %lu\r\n\r\n",
+             get_mime_type(filepath), filesize);
+    send(client_fd, header, strlen(header), 0);
+    sendfile(client_fd, file_fd, NULL, filesize);
+
+    close(file_fd);
 }
 
-void send_new(int fd, char *msg) {
- int len = strlen(msg);
- if (send(fd, msg, len, 0) == -1) {
-  printf("#\n");
- }else{
-  printf(">\n");
+// Obtém uma string de uma linha específica no arquivo de configuração
+char* get_config_string(const char *filename, int target_line) {
+    static char value[256];
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Erro ao abrir arquivo de configuração");
+        exit(EXIT_FAILURE);
+    }
 
- }
+    int line_count = 0;
+    while (fgets(value, sizeof(value), file)) {
+        if (value[0] == '#' || strlen(value) < 2) continue;
+        value[strcspn(value, "\r\n")] = 0;
+        if (line_count == target_line) {
+            fclose(file);
+            return value;
+        }
+        line_count++;
+    }
+    fclose(file);
+    return NULL;
 }
 
-int main(int argc, char *argv[]){
+// Obtém um número inteiro de uma linha específica no arquivo de configuração
+int get_config_int(const char *filename, int target_line) {
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Erro ao abrir arquivo de configuração");
+        exit(EXIT_FAILURE);
+    }
 
-	struct sockaddr_in server_addr, client_addr;
-	socklen_t sin_len=sizeof(client_addr);
-	int fd_server,fd_client;
-	char buf[2048];
-	/* Diretorio Raiz */
-	char* rootDir = loadConfigFile(2);
-	char* rootFile = loadConfigFile(5);
-	int on=1,fdimg,fdfile;
+    char line[64];
+    int line_count = 0;
+    while (fgets(line, sizeof(line), file)) {
+        if (line[0] == '#' || strlen(line) < 2) continue;
+        line[strcspn(line, "\r\n")] = 0;
+        if (line_count == target_line) {
+            fclose(file);
+            return atoi(line);
+        }
+        line_count++;
+    }
+    fclose(file);
+    return -1;
+}
 
-	/* COMEÇO DA INTERFACE DE UM SOCKET */
-	fd_server = socket(AF_INET, SOCK_STREAM, 0);
-	if(fd_server < 0){
-		perror("socket");
-		exit(1);
-	}
+// Manipula requisições GET
+void handle_get(int client_fd, const char *rootDir, const char *filename) {
+    if (!filename || strcmp(filename, "/") == 0) {
+        filename = "/index.html";  // Página padrão
+    }
 
-	/* CONFIGURANDO AS OPÇÕES */
-	setsockopt(fd_server, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(int));
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_addr.s_addr = INADDR_ANY;
-	server_addr.sin_port = htons(atoi( loadConfigFile(8) ));
+    if (strstr(filename, "..")) { // Prevenir ataques de Directory Traversal
+        send(client_fd, "HTTP/1.1 403 Forbidden\r\n\r\n", 26, 0);
+        return;
+    }
 
-	/* ATRIBUINDO UM "NOME" */
-	if(bind(fd_server, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1){
-		perror("bind");
-		close(fd_server);
-		exit(1);
-	}
+    char filepath[512];
+    snprintf(filepath, sizeof(filepath), "%s%s", rootDir, filename);
+    
+    send_file(client_fd, filepath);
+}
 
-	/* NUMERO MAXIMO DE CONEXÕES*/
-	if(listen(fd_server, 10) == -1){
-		perror("listen");
-		close(fd_server);
-		exit(1);
-	}
+// Manipula requisições POST
+void handle_post(int client_fd, const char *buffer) {
+    
+    printf("\U0001F4E2 [INFO] Método POST recebido!\n");
 
-	system("@cls||clear");
-	printf("\nROOT DIR:  [%s] \n", rootDir);
-	printf("ROOT FILE: [%s] \n", rootFile);
-    printf(
-            "Servidor Iniciado: %shttp://127.0.0.1:%s%s\n",
-            "\033[92m",loadConfigFile(8),"\033[0m\n"
-    		);
+    // Encontrar o Content-Length para saber o tamanho do corpo da requisição
+    char *content_length_str = strstr(buffer, "Content-Length: ");
+    int content_length = 0;
+    if (content_length_str) {
+        content_length = atoi(content_length_str + 16);
+    }
 
-	while(1){
-			/* NOVO "CLIENTE" */
-			fd_client = accept(fd_server, (struct sockaddr*)&client_addr, &sin_len);		
-			if(fd_client == -1){
-				perror("Conexão Falhou... \n");
-				continue;
-			}
-			if(!fork()){
-				/* PROCESSO FILHO */
-				close(fd_server);		
-				/* LIMPAR BUFFER */
-				memset(buf, 0, 2048);
-				read(fd_client, buf, 2047);
+    // Se houver um corpo na requisição
+    char *body = strstr(buffer, "\r\n\r\n");
+    if (body) {
+        body += 4;  // Avançar os 4 caracteres do \r\n\r\n para chegar no corpo
+    }
 
-				/* GET VERBOSE */
-				printLog(buf);
-				
-				/* VERIFICA O TIPO DE ARQUIVO e o Nome do Arquivo*/
-				char buf_filename[2048];
-				char buf_type[2048];
-				memcpy(buf_filename, buf, 2048);
-				memcpy(buf_type, buf, 2048);
-				
-				char *filename;
-				char *type;
-				filename = strtok(buf_filename, " ");
-				filename = strtok(NULL, " ");
-				//filename = strtok(filename, "/");
+    if (content_length > 0 && body) {
+        char post_data[1024] = {0};
+        strncpy(post_data, body, content_length);
+        post_data[content_length] = '\0'; // Certificar que a string termina corretamente
 
-				type = strtok(buf_type, ".");
-				type = strtok(NULL, ".");
-				type = strtok(type, " ");
+        printf("\U0001F4DD [POST DATA]: %s\n", post_data);
 
-				char bufConcat[256];
-				snprintf(bufConcat, sizeof bufConcat, "%s%s", rootDir, filename);
-				fdfile = open(bufConcat, O_RDONLY);
-                
-				/* ENVIA PARA O CLIENTE VISUALIZAR O FORMATO */
-				int i;
-   				for (i = 0; extensions[i].ext != NULL; i++) {
-					if (!strcmp(type, extensions[i].ext)) {
-						send_new(fd_client, "HTTP/1.1 200 OK\r\n");
-						send_new(fd_client, "Content-type:image; charset:UTF-8\r\n\r\n");
-						sendfile(fd_client, fdfile, NULL, fsize(bufConcat));
-						close(fd_client);
-					}
-				}
+        // Responder ao cliente com os dados recebidos
+        char response[1024];
+        snprintf(response, sizeof(response), 
+                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n"
+                 "Dados recebidos: %s", post_data);
+        send(client_fd, response, strlen(response), 0);
+    } else {
+        send(client_fd, "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\n"
+                        "Nenhum dado POST recebido.", 51, 0);
+    }
+}
 
-				send_new(fd_client, webpage);
-	
-				if(!strcmp("/", filename)){
-					printf("AAAAAAAAAA");
-					/* ENVIA PARA O CLIENTE VISUALIZAR A PAGINA PADRÃO */
-					snprintf(bufConcat, sizeof bufConcat, "%s/%s", rootDir, rootFile);
-					printf("BBBBBBBB: %s\n\n", bufConcat);
-					fdfile = open(bufConcat, O_RDONLY);
 
-					sendfile(fd_client,fdfile,NULL,fsize(bufConcat));
-				}else{
-					printf("	Acess: [%s]\n", bufConcat);
-					printf("	Acess: [%s]\n", type);
-					/* Tratamento ERROR 404*/
-					if(fdfile == -1){
-						printf("404 File not found Error\n");
-						send_new(fd_client, "HTTP/1.1 404 Not Found\r\n");
-						send_new(fd_client, "<html><head><title>404 Not Found</head></title>");
-					}else{
-						sendfile(fd_client,fdfile,NULL,fsize(bufConcat));
-					}
-				}
-                
-				close(fdfile);	
-				close(fd_client);
-				exit(0);
-			}
-			
-			/* PROCESSO PAI */
-			close(fd_client);
-	}
-	
+// Processa a requisição HTTP
+void handle_request(int client_fd, const char *rootDir) {
+    char buffer[2048] = {0};
+    read(client_fd, buffer, sizeof(buffer) - 1);
+    
+    printf(LOG_SEPARATOR);
+    printf("\U0001F680 [REQUISIÇÃO] Recebida:\n%s\n", buffer);
 
-	return 0;
+    RequestHandler handler = {handle_get, handle_post};
+
+    if (strncmp(buffer, "GET ", 4) == 0) {
+        char *filename = strtok(buffer + 4, " ");
+        handler.handle_get(client_fd, rootDir, filename);
+    } else if (strncmp(buffer, "POST ", 5) == 0) {
+        handler.handle_post(client_fd, buffer);
+    } else {
+        send(client_fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", 35, 0);
+    }
+}
+
+void start_server(const char *rootDir, int port) {
+    int server_fd, client_fd;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_len = sizeof(client_addr);
+
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("Erro ao criar socket");
+        exit(EXIT_FAILURE);
+    }
+    
+    int opt = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(port);
+
+    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Erro ao fazer bind");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(server_fd, 10) < 0) {
+        perror("Erro ao escutar");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("\U0001F680 [SERVIDOR] Rodando em: http://127.0.0.1:%d/\n", port);
+
+    while (1) {
+        client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+        if (client_fd < 0) {
+            perror("Erro ao aceitar conexão");
+            continue;
+        }
+        
+        printf("\U0001F4AC [NOVA CONEXÃO] Cliente conectado. Processando requisição...\n");
+        handle_request(client_fd, rootDir);
+        close(client_fd);
+    }
+    close(server_fd);
+}
+
+int main() {
+    const char *config_file = ".serverConfig";
+    
+    char *rootDir = get_config_string(config_file, 0);
+    int port = get_config_int(config_file, 2);
+    
+    printf(LOG_SEPARATOR);
+    printf("\U0001F50E [CONFIG] RootDir: %s\n", rootDir);
+    printf("\U0001F50E [CONFIG] Port: %d\n", port);
+
+    if (!rootDir || port < 1024 || port > 65535) {
+        printf("\U0001F6AB [ERRO] Configuração inválida!\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    printf("\U0001F4A1 [INFO] Iniciando servidor...\n");
+    start_server(rootDir, port);
+
+    return 0;
 }
