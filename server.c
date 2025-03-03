@@ -7,7 +7,9 @@
 #include <sys/sendfile.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <pthread.h>
 
+#define MAX_POST_SIZE 8192 // 8KB máximo
 #define LOG_SEPARATOR "\n========================================\n"
 
 // Declaração das funções
@@ -22,6 +24,12 @@ typedef struct {
     char *ext;
     char *mediatype;
 } extn;
+
+typedef struct {
+    int client_fd;
+    const char *rootDir;
+} ThreadArgs;
+
 
 // Tipos de media suportados
 extn extensions[] = {
@@ -147,12 +155,25 @@ void handle_get(int client_fd, const char *rootDir, const char *filename) {
 
     if (strstr(filename, "..")) { // Prevenir ataques de Directory Traversal
         send(client_fd, "HTTP/1.1 403 Forbidden\r\n\r\n", 26, 0);
+        printf("\U0001F6AB [ERRO] Tentativa de Directory Traversal: %s\n", filename);
         return;
     }
 
-    char filepath[512];
+    char filepath[512], real_filepath[512];
     snprintf(filepath, sizeof(filepath), "%s%s", rootDir, filename);
     
+    printf("\U0001F50D [DEBUG] filepath antes do realpath: %s\n", filepath);
+    
+    if (realpath(filepath, real_filepath) == NULL) {
+        perror("\U0001F6AB [ERRO] Falha ao resolver realpath");
+        printf("\U0001F50D [DEBUG] Caminho fornecido para realpath: %s\n", filepath);
+        send(client_fd, "HTTP/1.1 403 Forbidden\r\n\r\n", 26, 0);
+        return;
+    }
+    
+
+    printf("\U0001F50D [DEBUG] real_filepath: %s\n", real_filepath);
+
     send_file(client_fd, filepath);
 }
 
@@ -166,6 +187,11 @@ void handle_post(int client_fd, const char *buffer) {
     int content_length = 0;
     if (content_length_str) {
         content_length = atoi(content_length_str + 16);
+    }
+
+    if (content_length > MAX_POST_SIZE) {
+        send(client_fd, "HTTP/1.1 413 Payload Too Large\r\n\r\n", 33, 0);
+        return;
     }
 
     // Se houver um corpo na requisição
@@ -183,16 +209,18 @@ void handle_post(int client_fd, const char *buffer) {
 
         // Responder ao cliente com os dados recebidos
         char response[1024];
-        snprintf(response, sizeof(response), 
-                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n"
-                 "Dados recebidos: %s", post_data);
+        snprintf(response, sizeof(response) - 1, 
+         "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n"
+         "Dados recebidos: %.900s", post_data);
+        response[sizeof(response) - 1] = '\0';  // Garantir terminação
+
         send(client_fd, response, strlen(response), 0);
+
     } else {
         send(client_fd, "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\n"
                         "Nenhum dado POST recebido.", 51, 0);
     }
 }
-
 
 // Processa a requisição HTTP
 void handle_request(int client_fd, const char *rootDir) {
@@ -212,6 +240,15 @@ void handle_request(int client_fd, const char *rootDir) {
     } else {
         send(client_fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", 35, 0);
     }
+}
+
+// Thread para processar cada requisição
+void* handle_request_thread(void* arg) {
+    ThreadArgs *args = (ThreadArgs*) arg;
+    handle_request(args->client_fd, args->rootDir);
+    close(args->client_fd);
+    free(args);
+    return NULL;
 }
 
 void start_server(const char *rootDir, int port) {
@@ -247,17 +284,28 @@ void start_server(const char *rootDir, int port) {
     printf("\U0001F680 [SERVIDOR] Rodando em: http://127.0.0.1:%d/\n", port);
 
     while (1) {
-        client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
-        if (client_fd < 0) {
+        int *client_fd = malloc(sizeof(int));
+        if (client_fd == NULL) {
+            perror("Erro ao alocar memória para client_fd");
+            continue;
+        }
+        *client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+        
+
+        if (*client_fd < 0) {
+            free(client_fd);
             perror("Erro ao aceitar conexão");
             continue;
         }
-        
-        printf("\U0001F4AC [NOVA CONEXÃO] Cliente conectado. Processando requisição...\n");
-        handle_request(client_fd, rootDir);
-        close(client_fd);
+
+        pthread_t thread;
+        ThreadArgs *args = malloc(sizeof(ThreadArgs));
+        args->client_fd = *client_fd;
+        args->rootDir = rootDir;
+
+        pthread_create(&thread, NULL, handle_request_thread, args);
+        pthread_detach(thread);
     }
-    close(server_fd);
 }
 
 int main() {
